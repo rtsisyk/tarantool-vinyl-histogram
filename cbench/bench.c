@@ -6,6 +6,7 @@
 #include <tarantool/module.h>
 #include <lua.h>
 #include <lauxlib.h>
+#define MP_SOURCE 1
 #include <msgpuck.h>
 
 #include "nb_histogram.h"
@@ -41,8 +42,13 @@ wl_upserts_uint_f(va_list ap)
 		if (box_upsert(space_id, index_id, tuple, tuple_end,
 			       ops, ops_end, 0, NULL) != 0)
 			return -1;
+		fiber_sleep(0);
 		double stop = clock_monotonic();
-		nb_histogram_add(hist, stop - start);
+		double delta = stop - start;
+		nb_histogram_add(hist, delta);
+		if (delta > 0.1) {
+			say_warn("!!! too long: %lf", delta);
+		}
 	}
 
 	return 0;
@@ -54,7 +60,7 @@ luaL_bench_upserts_uint(lua_State *L)
 	const uint32_t SPACE_ID = 512;
 	const uint32_t INDEX_ID = 0;
 	const int FIBER_COUNT = 10;
-	const double DURATION = 20.0;
+	const double DURATION = 600.0;
 	double PERCENTILES[] = { 0.05, 0.50, 0.95, 0.96, 0.97, 0.98, 0.99,
 		0.995, 0.999, 0.9995, 0.9999 };
 	size_t PERCENTILES_SIZE = sizeof(PERCENTILES) / sizeof(PERCENTILES[0]);
